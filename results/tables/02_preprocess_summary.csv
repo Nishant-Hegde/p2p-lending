@@ -1,0 +1,8 @@
+quantity,mine,paper
+train rows,550774.0,"521,870"
+test rows,236046.0,"223,659"
+features,1126.0,"1,097"
+numeric features,63.0,
+one-hot features,1063.0,
+PCA components for 95% variance,951.0,~900
+PCA components / features (%),84.5,"~82 (900 of 1,097)"

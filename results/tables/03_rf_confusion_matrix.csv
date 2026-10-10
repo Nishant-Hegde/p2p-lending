@@ -1,0 +1,5 @@
+split,true_class,Predicted Default,Predicted Paid Off
+train,True Default,102644,0
+train,True Paid Off,0,448130
+test,True Default,2641,41349
+test,True Paid Off,1899,190157

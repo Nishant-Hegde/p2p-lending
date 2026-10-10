@@ -1,0 +1,11 @@
+quantity,mine,paper
+rows,786820.0,"745,529"
+n_positive (Fully Paid),640186.0,
+n_negative (Charged Off + Default),146634.0,
+pct_positive,81.36,~81
+pct_negative,18.64,~19
+raw columns,151.0,
+rows issued 2012,53367.0,
+rows issued 2013,134804.0,
+rows issued 2014,223103.0,
+rows issued 2015,375546.0,

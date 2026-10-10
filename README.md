@@ -1,0 +1,185 @@
+# LendingClub loan default and profitability prediction: a replication
+
+This project replicates the paper **"LendingClub Loan Default and Profitability Prediction"** by Peiqian Li and
+Gao Han (Stanford CS229), included here as [`paper.pdf`](paper.pdf), using the public LendingClub accepted-loans
+data from Kaggle. It reproduces what the paper does and nothing more:
+
+1. select 2012-2015 loans that have a final status,
+2. clean and encode the features,
+3. train three classifiers that predict whether a loan is fully paid,
+4. train regressors that predict a loan's net annualized return (NAR),
+5. simulate the paper's loan-selection strategy.
+
+Results next to the paper's numbers: [`results/RESULTS.md`](results/RESULTS.md).
+Every judgement call where the paper is unclear: [`ASSUMPTIONS.md`](ASSUMPTIONS.md).
+
+## Setup for teammates
+
+You need Git, **Python 3.13** (the version the committed results were produced with) and about 3 GB of free disk.
+
+**1. Clone**
+
+```bash
+git clone <repo-url>
+cd lendingclub-replication
+```
+
+**2. Create and activate a virtual environment**
+
+Windows (PowerShell):
+
+```powershell
+py -3.13 -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+Mac / Linux:
+
+```bash
+python3.13 -m venv .venv
+source .venv/bin/activate
+```
+
+If PowerShell refuses to run the activation script, use `.venv\Scripts\activate.bat` from `cmd` instead.
+
+**3. Install the pinned packages**
+
+```bash
+pip install -r requirements.txt
+```
+
+**4. Get the data** (375 MB, not stored in git)
+
+Option A, Kaggle API:
+
+1. Create a free account at <https://www.kaggle.com> and sign in.
+2. Authenticate the Kaggle client (installed in step 3). Either run `kaggle auth login`, or create a token at
+   <https://www.kaggle.com/settings/api> and save it as `~/.kaggle/access_token`
+   (Windows: `C:\Users\<you>\.kaggle\access_token`). Keep the token outside this folder and never commit it.
+3. Download:
+
+```bash
+python src/00_download_data.py
+```
+
+Option B, manual: open <https://www.kaggle.com/datasets/wordsforthewise/lending-club>, download
+`accepted_2007_to_2018Q4.csv.gz`, and put it, still compressed, at
+`data/raw/accepted_2007_to_2018Q4.csv.gz`.
+
+**5. Smoke test, then the full run**
+
+```bash
+python src/run_all.py --sample 0.01
+```
+
+This runs every stage on 1% of the loans and should end with `ALL DONE ... Setup works.` after about 2 minutes
+(up to about 7 on a busy or slower machine). Its outputs go to `sample_0.01` folders and do not touch the
+committed results. Then:
+
+```bash
+python src/run_all.py
+```
+
+**6. Expected runtime and memory for the full run**
+
+Measured for the committed run on a 22-thread laptop CPU with 31 GB RAM: **about 3 hours in total**
+(per-step times are also at the bottom of `results/RESULTS.md`). Forest training uses all CPU cores, so expect
+several times longer on a 4-core machine. Times also vary a lot with what else the machine is doing: an earlier
+run of the depth-4 regression forest on the same laptop took 16 minutes instead of 38.
+
+| Stage | Time | Peak RAM | Notes |
+|---|---|---|---|
+| 01 load + filter | 2 min | 2.5 GB | reads the 2.26 M-row raw file in chunks |
+| 02 preprocess | 3 min | 8.7 GB | writes about 3.6 GB to `data/processed/` |
+| 03 classification | 39 min | 7.1 GB | logistic regression 3 min, neural network 8.5 min, random forest 22 min |
+| 04 regression | 134 min | 14.2 GB | linear 1.6 min, ridge 0.8 min, neural network 4 min, forests depth 4 / 8 / 10: 38 / 59 / 30 min |
+| 05 loan selection | seconds | 0.2 GB | |
+
+RAM: the full run peaked at **14.2 GB** for one process (the linear models in stage 04, which fit on float64
+copies of the 550,774 x 1,126 training matrix). A 16 GB machine is therefore too tight with default settings;
+use 24 GB or more, or set `LINEAR_DTYPE = "float32"` in `src/config.py`, which roughly halves that peak
+(the numbers of logistic, linear and ridge regression may then differ slightly from the committed ones; this
+setting has not been run on the full data). Stage 02 needs about 9 GB either way. Close other applications.
+
+Both teammates get identical numbers on the same data file, because every random choice uses
+`RANDOM_STATE = 42` and the package versions are pinned.
+
+## Project structure
+
+```
+lendingclub-replication/
+├── data/
+│   ├── raw/                  the .csv.gz goes here (not in git)
+│   └── processed/            cached outputs of each stage (not in git)
+├── src/
+│   ├── config.py             paths, RANDOM_STATE, TEST_SIZE and every tunable constant
+│   ├── utils.py              command-line options, cache checks, timing, saving tables and figures
+│   ├── 00_download_data.py
+│   ├── 01_load_filter.py
+│   ├── 02_preprocess.py
+│   ├── 03_classification.py
+│   ├── 04_regression.py
+│   ├── 05_loan_selection.py
+│   └── run_all.py            runs 01 -> 05, then writes results/RESULTS.md
+├── models/                   trained models as joblib files (not in git)
+├── results/
+│   ├── figures/              heatmap, ROC curve, NAR histogram, return curve
+│   ├── tables/               every metric table as .csv and .md
+│   └── RESULTS.md            paper vs this replication
+├── paper.pdf
+├── ASSUMPTIONS.md
+├── requirements.txt
+└── README.md
+```
+
+| Script | Paper section | What it does | Main outputs |
+|---|---|---|---|
+| `00_download_data.py` | | Downloads the raw file with the Kaggle API; skips if present | `data/raw/accepted_2007_to_2018Q4.csv.gz` |
+| `01_load_filter.py` | III-A | Keeps loans issued 2012-2015 with status Fully Paid (label 1) or Charged Off / Default (label 0) | `data/processed/filtered.parquet`, `tables/01_*` |
+| `02_preprocess.py` | III-B | Drops empty, constant, free-text and leaking columns; fills missing values (mean / max / zero sets); one-hot encodes; converts dates; 70/30 stratified split; standardizes; PCA check; correlation heatmap | `X_train.npy`, `X_test.npy`, `y_*.npy`, `feature_names.json`, `regression_cols_*.parquet`, `tables/02_*`, `figures/fig1_correlation_heatmap.png` |
+| `03_classification.py` | V | Logistic regression, neural network, random forest; confusion matrices and reports for train and test; ROC curve of the forest | `tables/03_*`, `figures/roc_random_forest_test.png`, `models/*_classifier.joblib` |
+| `04_regression.py` | VI-VII | Builds the NAR label; linear, ridge, neural network and three random-forest regressors; MSE and R2 | `tables/04_*`, `figures/nar_distribution.png`, `models/*_regressor.joblib`, `rf10_predictions_*.npz` |
+| `05_loan_selection.py` | VIII | Ranks loans by predicted NAR; return curve; results at M = 0.132; sweep of M | `tables/05_*`, `figures/fig2_return_vs_pct_invested.png` |
+| `run_all.py` | | Runs 01 to 05 and builds the comparison report | `results/RESULTS.md` |
+
+## Rerunning one stage or one model
+
+Each script runs on its own, from the project root or from `src/`. It reads the previous stage's cached output
+and, if that is missing, stops with a message naming the script to run first.
+
+```bash
+python src/02_preprocess.py
+```
+
+Train a single model with `--model` (stage 03: `logreg`, `mlp`, `rf`; stage 04: `linear`, `ridge`, `mlp`,
+`rf4`, `rf8`, `rf10`):
+
+```bash
+python src/03_classification.py --model rf
+```
+
+```bash
+python src/04_regression.py --model rf10
+```
+
+Resume the pipeline from a stage, or only rebuild the report from the saved tables:
+
+```bash
+python src/run_all.py --from 4
+```
+
+```bash
+python src/run_all.py --report-only
+```
+
+Add `--sample <fraction>` to any of these for a quick debug run, for example `--sample 0.05`. A sampled run reads
+and writes only `data/processed/sample_<fraction>/`, `models/sample_<fraction>/` and
+`results/sample_<fraction>/`, so stage N with `--sample 0.05` needs stage N-1 run with the same value.
+
+## Where to find results
+
+* [`results/RESULTS.md`](results/RESULTS.md): side-by-side comparison with the paper and a discussion of the gaps.
+* `results/tables/`: one `.csv` and one `.md` per table, prefixed with the stage number.
+* `results/figures/`: `fig1_correlation_heatmap.png`, `roc_random_forest_test.png`, `nar_distribution.png`,
+  `fig2_return_vs_pct_invested.png`.
+* `results/tables/runtimes.md`: time and peak memory of each step of the committed run.

@@ -1,0 +1,26 @@
+# data and models are large and regenerable: never commit them
+data/raw/*
+data/processed/*
+models/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!models/.gitkeep
+*.csv.gz
+*.parquet
+*.npz
+*.npy
+*.joblib
+
+# sampled debug runs (python src/... --sample X)
+results/sample_*/
+
+# environments, caches, secrets, OS files
+venv/
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+kaggle.json
+access_token
+.env
+.DS_Store

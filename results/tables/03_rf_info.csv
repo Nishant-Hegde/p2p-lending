@@ -1,0 +1,2 @@
+model,fit_seconds,test_auc
+rf,1305.7,0.7200343315036561
