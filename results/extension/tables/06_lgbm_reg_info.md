@@ -1,0 +1,3 @@
+| model | num_leaves | learning_rate | min_child_samples | n_estimators |
+|---|---:|---:|---:|---:|
+| lgbm | 63 | 0.05 | 200 | 370 |

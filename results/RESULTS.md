@@ -2,6 +2,8 @@
 
 Paper: Li & Han, *LendingClub Loan Default and Profitability Prediction* (Stanford CS229), `paper.pdf`. "Mine" = this repository, produced by `python src/run_all.py`. All metrics are on the **test set** unless stated. Underlying tables: `results/tables/`; decisions where the paper is vague: `ASSUMPTIONS.md`.
 
+Beyond the paper: a LightGBM extension built on top of this replication is reported separately in [`extension/EXTENSION.md`](extension/EXTENSION.md). It does not change any number in this file.
+
 ## 1. Dataset and preprocessing (Section III)
 
 | Quantity | Mine | Paper |

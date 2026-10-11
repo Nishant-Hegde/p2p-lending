@@ -13,8 +13,9 @@ import config
 
 
 # ----------------------------------------------------------------------------- CLI
-def parse_args(description, models=None):
-    """Common CLI: --sample <fraction> and, for the model stages, --model <name>."""
+def parse_args(description, models=None, tasks=None):
+    """Common CLI: --sample <fraction> and, for the model stages, --model <name>
+    (or --task <name> for the extension script)."""
     p = argparse.ArgumentParser(description=description)
     p.add_argument("--sample", type=float, default=None, metavar="FRACTION",
                    help="debug run on a random fraction of the filtered loans, e.g. 0.05 "
@@ -22,6 +23,9 @@ def parse_args(description, models=None):
     if models:
         p.add_argument("--model", choices=list(models) + ["all"], default="all",
                        help="train only this model (default: all)")
+    if tasks:
+        p.add_argument("--task", choices=list(tasks) + ["all"], default="all",
+                       help="run only this part (default: all)")
     args = p.parse_args()
     if args.sample is not None and not 0 < args.sample < 1:
         p.error("--sample must be a fraction strictly between 0 and 1, e.g. 0.05")

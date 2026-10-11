@@ -149,3 +149,39 @@ or at the top of the stage script. Tables referenced here are written to `result
     k >= 100 against k / N, where N is the number of loans kept for the regression in that split (#21).
 27. The threshold M = 0.132 is the paper's value, applied as given ("predicted NAR > M"), not re-tuned.
 28. The abstract says the strategy picks 1.76% of loans; Section VIII says 1.7%. 1.76% is used for comparison.
+
+## Extension: LightGBM (`src/06_lightgbm_extension.py`, not part of the paper)
+29. **Scope.** LightGBM 4.7.0 is added as one further model for classification and for NAR regression. It uses
+    exactly the replication's inputs: the cached `X_train` / `X_test`, the same labels and split, and for the
+    regression the NAR label and excluded-loans rule of #21, obtained by calling `nar_label()` from
+    `04_regression.py` (not a second implementation). Evaluation reuses `evaluate()` from `03_classification.py`
+    and the selection functions from `05_loan_selection.py`. Nothing in stages 00-05 or their results is changed.
+30. **Fixed settings.** Classifier: `objective="binary"`, `class_weight="balanced"`. Regressor:
+    `objective="regression"` (squared error). Both: `random_state=42`, `n_jobs=-1`, `deterministic=True`,
+    `force_col_wise=True`; everything else is the LightGBM default (no row or column subsampling).
+31. **Tuning.** A validation set of 20% of the *training* rows is split off (seed 42, stratified by label for the
+    classifier); the test set is never used for tuning. A fixed grid of six configurations is tried:
+    (`num_leaves`, `learning_rate`, `min_child_samples`) = (31, 0.1, 20), (63, 0.1, 20), (127, 0.1, 20),
+    (31, 0.1, 200), (63, 0.1, 200), (63, 0.05, 200). Each is trained with up to 2,000 trees and early stopping
+    after 50 rounds without improvement of the validation metric (AUC for the classifier, squared error for the
+    regressor). The configuration with the best validation metric is chosen, with `n_estimators` set to its best
+    iteration, and the final model is refit with those values on all training rows. The grid is deliberately
+    small (the whole search takes about 5 minutes on the build machine).
+32. **Chosen hyperparameters (full data).**
+    * Classifier: `num_leaves=63, learning_rate=0.05, min_child_samples=200, n_estimators=383`
+      (validation AUC 0.7342; the six configurations range from 0.7317 to 0.7342).
+    * Regressor: `num_leaves=63, learning_rate=0.05, min_child_samples=200, n_estimators=370`
+      (validation MSE 0.05118; range 0.05118 to 0.05151).
+    * Both winners are the last grid point, i.e. at the edge of the grid (lowest learning rate, largest
+      `min_child_samples`), so a wider search could find slightly better values. The differences between
+      configurations are small. Tuning tables: `results/extension/tables/06_clf_tuning.md`, `06_reg_tuning.md`.
+33. **ROC comparison and feature importances** use the replication's saved Random Forest classifier
+    (`models/rf_classifier.joblib`); its test-set probabilities and `feature_importances_` are cached in
+    `data/processed/extension/` the first time.
+34. **Loan selection** applies the same functions and the same threshold M = 0.132 and sweep as stage 05 to the
+    LightGBM predictions. An additional table reports the mean actual NAR of the best-ranked 1%, 1.76%, 5%, 10%
+    and 25% of test loans, because very few predictions reach the paper's threshold.
+35. **SHAP.** `shap.TreeExplainer` (SHAP 0.53.0) on the LightGBM classifier for a random sample of 10,000 test
+    loans (seed 42). SHAP values are in log-odds of the positive class "Paid Off". The feature values shown in
+    the beeswarm plot are the standardized ones the model was trained on. The Random Forest column of the
+    comparison table is scikit-learn's impurity-based `feature_importances_`, a different quantity from SHAP.

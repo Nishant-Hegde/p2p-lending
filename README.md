@@ -123,11 +123,13 @@ p2p-lending/
 │   ├── 03_classification.py
 │   ├── 04_regression.py
 │   ├── 05_loan_selection.py
+│   ├── 06_lightgbm_extension.py   extension beyond the paper (optional)
 │   └── run_all.py            runs 01 -> 05, then writes results/RESULTS.md
 ├── models/                   trained models as joblib files (not in git)
 ├── results/
 │   ├── figures/              heatmap, ROC curve, NAR histogram, return curve
 │   ├── tables/               every metric table as .csv and .md
+│   ├── extension/            LightGBM extension: EXTENSION.md, tables/, figures/
 │   └── RESULTS.md            paper vs this replication
 ├── paper.pdf
 ├── ASSUMPTIONS.md
@@ -143,7 +145,8 @@ p2p-lending/
 | `03_classification.py` | V | Logistic regression, neural network, random forest; confusion matrices and reports for train and test; ROC curve of the forest | `tables/03_*`, `figures/roc_random_forest_test.png`, `models/*_classifier.joblib` |
 | `04_regression.py` | VI-VII | Builds the NAR label (loans without a usable last-payment date are excluded); linear, ridge, neural network and three random-forest regressors; MSE and R2 | `tables/04_*`, `figures/nar_distribution.png`, `models/*_regressor.joblib`, `rf10_predictions_*.npz` |
 | `05_loan_selection.py` | VIII | Ranks loans by predicted NAR; return curve; results at M = 0.132; sweep of M | `tables/05_*`, `figures/fig2_return_vs_pct_invested.png` |
-| `run_all.py` | | Runs 01 to 05 and builds the comparison report | `results/RESULTS.md` |
+| `run_all.py` | | Runs 01 to 05 and builds the comparison report; `--with-extension` also runs 06 | `results/RESULTS.md` |
+| `06_lightgbm_extension.py` | not in the paper | LightGBM classifier and NAR regressor, loan selection on its predictions, SHAP explanations | `results/extension/` |
 
 ## Rerunning one stage or one model
 
@@ -179,6 +182,37 @@ Add `--sample <fraction>` to any of these for a quick debug run, for example `--
 and writes only `data/processed/sample_<fraction>/`, `models/sample_<fraction>/` and
 `results/sample_<fraction>/`, so stage N with `--sample 0.05` needs stage N-1 run with the same value.
 
+## Extension: LightGBM
+
+`src/06_lightgbm_extension.py` goes beyond the paper. It adds LightGBM (gradient boosting, which the paper does
+not use) on top of the replication: a classifier, a NAR regressor, the paper's loan selection on the LightGBM
+predictions, and SHAP explanations of the classifier. It only reads the cached outputs of stages 02-05 and writes
+to `results/extension/`, `models/extension/` and `data/processed/extension/`, so the replication results are
+never touched. Results and discussion: [`results/extension/EXTENSION.md`](results/extension/EXTENSION.md).
+
+Run it after the replication stages (it needs their cached data, the Random Forest classifier from stage 03
+and the depth-10 forest predictions from stage 04, and says which script to run if something is missing):
+
+```bash
+python src/06_lightgbm_extension.py
+```
+
+Or one part at a time with `--task` (`clf`, `reg`, `select`, `shap`); `select` needs `reg` first and `shap`
+needs `clf` first:
+
+```bash
+python src/06_lightgbm_extension.py --task clf
+```
+
+To run it at the end of the whole pipeline (off by default):
+
+```bash
+python src/run_all.py --with-extension
+```
+
+`--sample <fraction>` works as for the other scripts. Runtime on the full data: about 7 minutes on the 22-thread
+build laptop (tuning the classifier 3 minutes, the regressor 2 minutes), with a peak of about 8 GB RAM.
+
 ## Where to find results
 
 * [`results/RESULTS.md`](results/RESULTS.md): side-by-side comparison with the paper and a discussion of the gaps.
@@ -186,3 +220,5 @@ and writes only `data/processed/sample_<fraction>/`, `models/sample_<fraction>/`
 * `results/figures/`: `fig1_correlation_heatmap.png`, `roc_random_forest_test.png`, `nar_distribution.png`,
   `fig2_return_vs_pct_invested.png`.
 * `results/tables/runtimes.md`: time and peak memory of each step of the committed run.
+* [`results/extension/EXTENSION.md`](results/extension/EXTENSION.md): the LightGBM extension (not part of the
+  paper), with its own `tables/` and `figures/`.

@@ -4,6 +4,7 @@
     python src/run_all.py --sample 0.01    smoke test on 1% of the loans
     python src/run_all.py --from 3         resume from stage 3
     python src/run_all.py --report-only    only rebuild RESULTS.md from the saved tables
+    python src/run_all.py --with-extension also run the LightGBM extension (stage 06) after stage 05
 """
 import argparse
 import subprocess
@@ -20,6 +21,7 @@ from utils import Dirs, fmt_time, rel
 SRC = Path(__file__).resolve().parent
 STAGES = ["01_load_filter.py", "02_preprocess.py", "03_classification.py", "04_regression.py",
           "05_loan_selection.py"]
+EXTENSION = "06_lightgbm_extension.py"      # optional, only with --with-extension
 
 # ---------------------------------------------------------------- numbers printed in the paper
 PAPER_CLS = {  # test set: class -> (precision, recall, f1)
@@ -67,6 +69,10 @@ def write_results(dirs):
         + (f" --sample {dirs.sample:g}" if sampled else "") + "`. All metrics are on the **test set** unless "
         "stated. Underlying tables: `results/tables/`; decisions where the paper is vague: `ASSUMPTIONS.md`.")
     add("")
+    if (dirs.results / "extension" / "EXTENSION.md").exists():
+        add("Beyond the paper: a LightGBM extension built on top of this replication is reported separately in "
+            "[`extension/EXTENSION.md`](extension/EXTENSION.md). It does not change any number in this file.")
+        add("")
     gaps = []          # (short description) collected for the discussion section
 
     # ---- 1. data
@@ -291,6 +297,8 @@ def main():
     ap.add_argument("--from", dest="start", type=int, default=1, choices=range(1, 6),
                     help="first stage to run (1-5); earlier stages must already be cached")
     ap.add_argument("--report-only", action="store_true", help="only rebuild RESULTS.md")
+    ap.add_argument("--with-extension", action="store_true",
+                    help=f"also run {EXTENSION} (LightGBM, not in the paper) after stage 05")
     a = ap.parse_args()
     if a.sample is not None and not 0 < a.sample < 1:
         ap.error("--sample must be a fraction strictly between 0 and 1")
@@ -307,6 +315,14 @@ def main():
                 sys.exit(f"\n{script} failed (exit code {code}); stopping. Fix the problem and resume with "
                          f"python src/run_all.py --from {i}{' ' + ' '.join(extra) if extra else ''}")
             print(f"{'#' * 20} {script} finished in {fmt_time(time.perf_counter() - t0)}", flush=True)
+        if a.with_extension:
+            print(f"\n{'#' * 20} {EXTENSION} {' '.join(extra)} (extension) {'#' * 20}", flush=True)
+            t0 = time.perf_counter()
+            code = subprocess.run([sys.executable, "-u", str(SRC / EXTENSION)] + extra).returncode
+            if code != 0:
+                sys.exit(f"\n{EXTENSION} failed (exit code {code}). The replication stages 01-05 finished; rerun "
+                         f"the extension with python src/{EXTENSION}{' ' + ' '.join(extra) if extra else ''}")
+            print(f"{'#' * 20} {EXTENSION} finished in {fmt_time(time.perf_counter() - t0)}", flush=True)
     write_results(Dirs(a.sample))
     if not a.report_only:
         print(f"\nALL DONE in {fmt_time(time.perf_counter() - t_all)}. Setup works." if a.sample

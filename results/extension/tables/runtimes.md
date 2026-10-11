@@ -1,0 +1,7 @@
+| stage | step | seconds | peak_ram_gb |
+|---|---|---:|---:|
+| 06_lightgbm_extension | clf: final fit | 41.4 | 7.56 |
+| 06_lightgbm_extension | clf: tuning | 165 | 7.56 |
+| 06_lightgbm_extension | reg: final fit | 29.3 | 7.78 |
+| 06_lightgbm_extension | reg: tuning | 134.5 | 7.78 |
+| 06_lightgbm_extension | shap | 10.4 | 0.5 |
