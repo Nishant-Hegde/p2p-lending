@@ -1,3 +1,3 @@
-| model | fit_seconds | test_auc |
-|---|---:|---:|
-| rf | 1306 | 0.72 |
+| model | test_auc |
+|---|---:|
+| rf | 0.72 |

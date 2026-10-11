@@ -75,7 +75,7 @@ def run_model(name, dirs):
     X_train, y_train = load_xy(dirs, "train", dtype)
     with step(f"fit {name} on {X_train.shape[0]:,} x {X_train.shape[1]:,} ({dtype})") as fit:
         model.fit(X_train, y_train)
-    info = {"model": name, "fit_seconds": round(fit["seconds"], 1)}
+    info = {"model": name}          # fit time is recorded only in runtimes.csv
     if getattr(model, "n_iter_", None) is not None:
         info["n_iter"] = int(np.max(model.n_iter_))
         print(f"     iterations / epochs: {info['n_iter']}")

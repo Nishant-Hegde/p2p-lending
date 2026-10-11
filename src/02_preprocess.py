@@ -218,7 +218,9 @@ def main():
         summary = pd.DataFrame({
             "quantity": ["train rows", "test rows", "features", "numeric features", "one-hot features",
                          "PCA components for 95% variance", "PCA components / features (%)"],
-            "mine": [len(idx_train), len(idx_test), p, len(num_cols), p - len(num_cols), k, round(100 * k / p, 1)],
+            # dtype=object keeps counts as integers next to the percentage
+            "mine": pd.Series([len(idx_train), len(idx_test), p, len(num_cols), p - len(num_cols), k,
+                               round(100 * k / p, 1)], dtype=object),
             "paper": ["521,870", "223,659", "1,097", "", "", "~900", "~82 (900 of 1,097)"]})
         save_table(summary, "02_preprocess_summary", dirs)
     record_runtime(dirs, STAGE, "total", total["seconds"])

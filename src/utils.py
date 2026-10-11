@@ -164,10 +164,15 @@ def load_json(path):
 
 
 # ----------------------------------------------------------------------------- cached data
-def load_xy(dirs, split, dtype=None):
-    """Load the cached design matrix and classification label of one split ('train' or 'test')."""
-    X = np.load(require(dirs.processed / f"X_{split}.npy", "02_preprocess.py", dirs))
+def load_xy(dirs, split, dtype=None, rows=None):
+    """Load the cached design matrix and classification label of one split ('train' or 'test').
+    `rows` (boolean mask) keeps only those rows; the file is memory-mapped so the full matrix is never copied."""
+    x_path = require(dirs.processed / f"X_{split}.npy", "02_preprocess.py", dirs)
     y = np.load(require(dirs.processed / f"y_{split}.npy", "02_preprocess.py", dirs))
+    if rows is None:
+        X = np.load(x_path)
+    else:
+        X, y = np.load(x_path, mmap_mode="r")[rows], y[rows]
     if dtype is not None and X.dtype != np.dtype(dtype):
         X = X.astype(dtype)
     return X, y

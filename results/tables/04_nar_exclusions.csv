@@ -1,0 +1,3 @@
+split,loans,excluded: last_pymnt_d missing,excluded: D <= 0,excluded total,excluded Charged Off / Default,excluded Fully Paid,kept for regression,kept with 0 < D < 30 (D set to 30)
+train,550774,413,803,1216,414,802,549558,350
+test,236046,174,327,501,174,327,235545,146

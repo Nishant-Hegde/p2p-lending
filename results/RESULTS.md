@@ -33,11 +33,13 @@ Precision / recall / F1 on the test set.
 | Random Forest (200 trees) | Paid Off | 0.82 / 0.99 / 0.90 | 0.92 / 0.95 / 0.94 |
 | Random Forest (200 trees) | weighted avg | 0.78 / 0.82 / 0.75 | 0.89 / 0.89 / 0.89 |
 
-| Model | Train weighted P / R / F1 (mine) | Train weighted (paper) | Test AUC (mine) | Test AUC (paper) |
+| Model | Train weighted P / R / F1 (mine) | Train weighted (paper) | Test AUC (mine) | Test AUC (poster) |
 |---|---|---|---:|---:|
 | Logistic Regression | 0.79 / 0.66 / 0.70 | not reported |  |  |
 | Neural Network (10,10,5,3) | 0.79 / 0.82 / 0.78 | 0.91 / 0.91 / 0.91 |  |  |
 | Random Forest (200 trees) | 1.00 / 1.00 / 1.00 | 0.97 / 0.96 / 0.96 | 0.720 | 0.94 |
+
+The AUC of 0.94 comes from the ROC figure on the authors' poster; the paper reports no AUC. The paper and the poster disagree on how well the Random Forest fits the training set: the paper's train table gives weighted F1 0.96 (Default recall 0.82), while the poster's train confusion matrix is perfect (99,163 / 0 / 0 / 422,707), as it is in this replication.
 
 Test confusion matrices (rows = true class, columns = predicted class):
 
@@ -54,46 +56,55 @@ Train confusion matrices and full reports: `results/tables/03_*`. ROC curve: ![R
 
 ## 3. Regression on net annualized return (Sections VI-VII)
 
-NAR = (total_pymnt / loan_amnt)^(365/D) - 1. Rows where D had to be set to the 30-day minimum: last_pymnt_d missing: 587; D <= 0: 1,130; 0 < D < 30: 496; total rows with D set to 30: 2,213.
+NAR = (total_pymnt / loan_amnt)^(365/D) - 1, D = days from issue_d to last_pymnt_d.
 
-Paper claim "most NARs of defaulted loans are well below -0.5": in this data **34.0%** of Charged Off / Default loans have NAR < -0.5 (53.9% are below -0.25). Distribution: `results/tables/04_nar_distribution.md`, figure `figures/nar_distribution.png`.
+Loans without a usable last-payment date (missing, or not after the issue date) are excluded from the regression and from the loan selection; the classifiers still use every loan.
+
+| Split | Loans | Excluded: last_pymnt_d missing | Excluded: D <= 0 | Excluded total | of which Charged Off / Default | of which Fully Paid | Kept for regression | Kept, D floored to 30 days |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| train | 550,774 | 413 | 803 | 1,216 | 414 | 802 | 549,558 | 350 |
+| test | 236,046 | 174 | 327 | 501 | 174 | 327 | 235,545 | 146 |
+
+Paper claim "most NARs of defaulted loans are well below -0.5": in this data **33.7%** of Charged Off / Default loans have NAR < -0.5 (53.7% are below -0.25). Distribution: `results/tables/04_nar_distribution.md`, figure `figures/nar_distribution.png`.
 
 | Model | Train MSE mine / paper | Train R2 mine / paper | Test MSE mine / paper | Test R2 mine / paper |
 |---|---|---|---|---|
-| Linear Regression | 0.054 / 0.040 | 0.038 / 0.243 | 0.053 / 5.014 | 0.034 / -9.494e+22 |
-| Ridge (alpha=1) | 0.054 / 0.040 | 0.038 / 0.243 | 0.053 / 0.040 | 0.034 / 0.238 |
-| Neural Network (20,10,5,3) | 0.050 / 0.036 | 0.110 / 0.324 | 0.055 / 0.037 | 0.012 / 0.306 |
-| Random Forest, depth 4 | 0.055 / 0.037 | 0.033 / 0.298 | 0.054 / 0.037 | 0.029 / 0.295 |
-| Random Forest, depth 8 | 0.053 / 0.035 | 0.069 / 0.329 | 0.053 / 0.036 | 0.038 / 0.312 |
-| Random Forest, depth 10 | 0.051 / 0.034 | 0.090 / 0.356 | 0.053 / 0.036 | 0.040 / 0.315 |
+| Linear Regression | 0.053 / 0.040 | 0.039 / 0.243 | 0.053 / 5.014 | 0.034 / -9.494e+22 |
+| Ridge (alpha=1) | 0.053 / 0.040 | 0.039 / 0.243 | 0.053 / 0.040 | 0.034 / 0.238 |
+| Neural Network (20,10,5,3) | 0.048 / 0.036 | 0.117 / 0.324 | 0.054 / 0.037 | 0.004 / 0.306 |
+| Random Forest, depth 4 | 0.053 / 0.037 | 0.030 / 0.298 | 0.053 / 0.037 | 0.030 / 0.295 |
+| Random Forest, depth 8 | 0.052 / 0.035 | 0.053 / 0.329 | 0.052 / 0.036 | 0.039 / 0.312 |
+| Random Forest, depth 10 | 0.051 / 0.034 | 0.075 / 0.356 | 0.052 / 0.036 | 0.040 / 0.315 |
 
 ## 4. Loan selection strategy (Section VIII), RF depth-10 predictions
 
+Percentages are of the loans kept for the regression (see the exclusion table in section 3).
+
 | Split | Loans with predicted NAR > 0.132 (mine) | Mean actual NAR of those loans (mine) | Mean NAR of all loans (mine) | Paper |
 |---|---:|---:|---:|---|
-| train | 0.01% (29 loans) | 179.7% | 0.2% | ~1.76% of loans, ~15% NAR |
-| test | 0.01% (26 loans) | 2.9% | 0.2% | ~1.76% of loans, ~15% NAR |
+| train | 0.00% (3 loans) | 114.5% | 0.2% | ~1.76% of loans, ~15% NAR |
+| test | 0.00% (3 loans) | -33.1% | 0.2% | ~1.76% of loans, ~15% NAR |
 
 Sweep over the threshold M (share of loans selected and their mean actual NAR):
 
 | M | Train % selected | Train NAR | Test % selected | Test NAR |
 |---:|---:|---:|---:|---:|
-| 0.05 | 0.09% | 19.8% | 0.10% | 4.6% |
-| 0.06 | 0.01% | 80.1% | 0.02% | 0.8% |
-| 0.07 | 0.01% | 93.0% | 0.02% | 0.4% |
-| 0.08 | 0.01% | 104.4% | 0.02% | 1.4% |
-| 0.09 | 0.01% | 112.4% | 0.02% | 1.3% |
-| 0.10 | 0.01% | 126.6% | 0.01% | 1.6% |
-| 0.11 | 0.01% | 142.5% | 0.01% | 3.1% |
-| 0.12 | 0.01% | 154.3% | 0.01% | 3.1% |
-| 0.13 | 0.01% | 179.7% | 0.01% | 3.1% |
-| 0.14 | 0.00% | 192.5% | 0.01% | 2.6% |
-| 0.15 | 0.00% | 199.4% | 0.01% | 2.3% |
-| 0.16 | 0.00% | 224.3% | 0.01% | 1.7% |
-| 0.17 | 0.00% | 224.3% | 0.01% | 1.5% |
-| 0.18 | 0.00% | 233.7% | 0.01% | 1.5% |
-| 0.19 | 0.00% | 244.4% | 0.01% | 8.7% |
-| 0.20 | 0.00% | 257.4% | 0.01% | 12.3% |
+| 0.05 | 0.19% | 9.4% | 0.18% | 6.0% |
+| 0.06 | 0.00% | 76.3% | 0.00% | -23.4% |
+| 0.07 | 0.00% | 89.9% | 0.00% | -23.4% |
+| 0.08 | 0.00% | 89.9% | 0.00% | -23.4% |
+| 0.09 | 0.00% | 89.9% | 0.00% | -33.1% |
+| 0.10 | 0.00% | 89.9% | 0.00% | -33.1% |
+| 0.11 | 0.00% | 89.9% | 0.00% | -33.1% |
+| 0.12 | 0.00% | 89.9% | 0.00% | -33.1% |
+| 0.13 | 0.00% | 114.5% | 0.00% | -33.1% |
+| 0.14 | 0.00% | 114.5% | 0.00% | -41.6% |
+| 0.15 | 0.00% | 114.5% | 0.00% | -41.6% |
+| 0.16 | 0.00% | 114.5% | 0.00% | -41.6% |
+| 0.17 | 0.00% | 114.5% | 0.00% | -41.6% |
+| 0.18 | 0.00% | 114.5% | 0.00% | -41.6% |
+| 0.19 | 0.00% | 114.5% | 0.00% | -41.6% |
+| 0.20 | 0.00% | 114.5% | 0.00% | -41.6% |
 
 Annualized return vs share of loans invested (paper Fig. 2):
 
@@ -106,13 +117,13 @@ Large gaps found in this run:
 - Logistic Regression: weighted F1 0.70 vs 0.88
 - Neural Network (10,10,5,3): weighted F1 0.76 vs 0.89
 - Random Forest (200 trees): weighted F1 0.75 vs 0.89
-- Random Forest AUC 0.720 vs 0.94
+- Random Forest AUC 0.720 vs 0.94 (poster)
 - Ridge (alpha=1): test R2 0.034 vs 0.238
-- Neural Network (20,10,5,3): test R2 0.012 vs 0.306
-- Random Forest, depth 4: test R2 0.029 vs 0.295
-- Random Forest, depth 8: test R2 0.038 vs 0.312
+- Neural Network (20,10,5,3): test R2 0.004 vs 0.306
+- Random Forest, depth 4: test R2 0.030 vs 0.295
+- Random Forest, depth 8: test R2 0.039 vs 0.312
 - Random Forest, depth 10: test R2 0.040 vs 0.315
-- selection at M=0.132: 0.01% of test loans, NAR 2.9% vs 1.76% / 15%
+- selection at M=0.132: 0.00% of test loans, NAR -33.1% vs 1.76% / 15%
 
 **What matches.** The dataset definition (years, final statuses, class balance), the size of the
 feature space, the PCA finding (95% of the variance needs most of the components, so no useful reduction) and the
@@ -122,8 +133,8 @@ scale of the NAR label (its variance is close to the ~0.053 implied by the paper
 columns it dropped. This replication removes every outcome / post-issuance column (payments received, recoveries,
 last payment date and amount, last FICO, outstanding principal, hardship and settlement fields; full list in
 `ASSUMPTIONS.md`), so the models only see what was known when the loan was issued. With those features the
-models are only moderately better than the base rate. The paper's numbers (AUC 0.94, 88% recall on defaults for a
-linear model, R2 of 0.24 for ridge regression on returns) are far above that. The most likely explanation is that
+models are only moderately better than the base rate. The authors' numbers (AUC 0.94 on the poster, 88% recall on
+defaults for a linear model, R2 of 0.24 for ridge regression on returns) are far above that. The most likely explanation is that
 some post-issuance columns were still among the paper's 1,097 features, which would make the targets partly
 predictable from their own consequences. **This is a hypothesis, not something this replication has tested**:
 testing it would mean deliberately adding leaking columns back, which is outside the "replicate only" scope.
@@ -146,11 +157,19 @@ Many charged-off borrowers pay for a year or more before stopping, which gives a
 return rather than a near-total loss.
 
 **Loan selection.** Because the regressors explain little of the NAR variance, predicted NARs are compressed
-towards the mean and very few loans exceed the paper's threshold M = 0.132, so the selected share and its
-return differ from the paper's 1.76% / 15% and are noisy; the sweep table shows how the selection behaves at
-lower thresholds.
-The very high *train* returns in the table come from a handful of loans repaid within a month or two with
-fees (NAR above 1, up to 22), which the forest partly memorizes; they do not carry over to the test set.
+towards the mean (in the full run 99.9% of the predictions are below 0.052). Only 3 / 3 loans (train / test)
+exceed the paper's threshold M = 0.132, so the strategy cannot be reproduced at that threshold: the returns
+reported for it rest on a handful of loans and are not meaningful, and in the full run the train figure is
+dominated by a single charged-off loan with NAR 3.14. The sweep table shows the selection at lower thresholds.
+
+**Loans without a usable last-payment date.** 1,717 loans (588 Charged Off / Default, 1,129 Fully
+Paid) have a missing `last_pymnt_d` or one that is not after `issue_d`, so D cannot be computed. A first version
+of this replication set D to 30 days for them. For charged-off loans in that group that had nevertheless paid
+back more than their principal, that rule produced impossible labels (NAR up to 22), which the regression forest
+partly memorized and which inflated the train-set selection return. They were artifacts of the 30-day rule, not
+real returns, so these loans are now excluded from the regression and from the loan selection (classification is
+unaffected). Kept loans with NAR above 1: 8 (largest NAR 3.18). In the full data these are charged-off
+loans whose recorded last payment falls one or two months after issue although more than the principal was paid back.
 
 ## 6. Runtime of this run
 
@@ -161,11 +180,11 @@ fees (NAR above 1, up to 22), which the forest partly memorizes; they do not car
 | 03_classification | fit logreg | 3.0 min | 7.10 |
 | 03_classification | fit mlp | 8.5 min | 7.10 |
 | 03_classification | fit rf | 21.8 min | 7.10 |
-| 04_regression | fit linear | 1.6 min | 14.16 |
-| 04_regression | fit mlp | 4.1 min | 14.16 |
-| 04_regression | fit rf10 | 29.9 min | 14.16 |
-| 04_regression | fit rf4 | 38.1 min | 14.16 |
-| 04_regression | fit rf8 | 58.6 min | 14.16 |
-| 04_regression | fit ridge | 45.5s | 14.16 |
-| 05_loan_selection | total | 0.7s | 0.18 |
+| 04_regression | fit linear | 46.8s | 14.10 |
+| 04_regression | fit mlp | 5.2 min | 14.10 |
+| 04_regression | fit rf10 | 60.0 min | 4.88 |
+| 04_regression | fit rf4 | 45.9 min | 4.88 |
+| 04_regression | fit rf8 | 25.0 min | 4.88 |
+| 04_regression | fit ridge | 8.4s | 14.10 |
+| 05_loan_selection | total | 0.5s | 0.18 |
 

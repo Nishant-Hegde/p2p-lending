@@ -30,7 +30,7 @@ PAPER_CLS = {  # test set: class -> (precision, recall, f1)
 PAPER_CLS_TRAIN_WEIGHTED = {"mlp": (0.91, 0.91, 0.91), "rf": (0.97, 0.96, 0.96)}   # logreg train not reported
 PAPER_CM_TEST = {"logreg": [[37632, 5135], [22448, 158444]], "mlp": [[30545, 12222], [11864, 169028]],
                  "rf": [[27760, 15007], [8750, 172142]]}
-PAPER_AUC = 0.94
+POSTER_AUC = 0.94       # only on the authors' poster (ROC figure); the paper itself reports no AUC
 PAPER_REG = {  # (train MSE, train R2, test MSE, test R2)
     "linear": (0.040, 0.243, 5.014, -9.494e22), "ridge": (0.040, 0.243, 0.040, 0.238),
     "mlp": (0.036, 0.324, 0.037, 0.306), "rf4": (0.037, 0.298, 0.037, 0.295),
@@ -106,7 +106,7 @@ def write_results(dirs):
         if abs(d) >= 0.05:
             gaps.append(f"{CLS_NAME[m]}: weighted F1 {te.loc['weighted avg', 'f1']:.2f} vs {PAPER_CLS[m]['weighted avg'][2]:.2f}")
     add("")
-    add("| Model | Train weighted P / R / F1 (mine) | Train weighted (paper) | Test AUC (mine) | Test AUC (paper) |\n|---|---|---|---:|---:|")
+    add("| Model | Train weighted P / R / F1 (mine) | Train weighted (paper) | Test AUC (mine) | Test AUC (poster) |\n|---|---|---|---:|---:|")
     for m in CLS_NAME:
         rep, info = table(dirs, f"03_{m}_classification_report"), table(dirs, f"03_{m}_info")
         if rep is None:
@@ -116,10 +116,14 @@ def write_results(dirs):
         auc = info["test_auc"].iloc[0] if info is not None and "test_auc" in info else None
         add(f"| {CLS_NAME[m]} | {tr['precision']:.2f} / {tr['recall']:.2f} / {tr['f1']:.2f} | "
             f"{' / '.join(f'{v:.2f}' for v in pt) if pt else 'not reported'} | "
-            f"{g(auc, '{:.3f}') if m == 'rf' else ''} | {PAPER_AUC if m == 'rf' else ''} |")
-        if m == "rf" and auc is not None and abs(auc - PAPER_AUC) >= 0.03:
-            gaps.append(f"Random Forest AUC {auc:.3f} vs {PAPER_AUC}")
+            f"{g(auc, '{:.3f}') if m == 'rf' else ''} | {POSTER_AUC if m == 'rf' else ''} |")
+        if m == "rf" and auc is not None and abs(auc - POSTER_AUC) >= 0.03:
+            gaps.append(f"Random Forest AUC {auc:.3f} vs {POSTER_AUC} (poster)")
     add("")
+    add(f"The AUC of {POSTER_AUC} comes from the ROC figure on the authors' poster; the paper reports no AUC. "
+        "The paper and the poster disagree on how well the Random Forest fits the training set: the paper's "
+        "train table gives weighted F1 0.96 (Default recall 0.82), while the poster's train confusion matrix is "
+        "perfect (99,163 / 0 / 0 / 422,707), as it is in this replication.\n")
     add("Test confusion matrices (rows = true class, columns = predicted class):\n")
     add("| Model | True class | Mine: pred. Default | Mine: pred. Paid Off | Paper: pred. Default | Paper: pred. Paid Off |\n|---|---|---:|---:|---:|---:|")
     for m in CLS_NAME:
@@ -137,14 +141,25 @@ def write_results(dirs):
 
     # ---- 3. regression
     add("## 3. Regression on net annualized return (Sections VI-VII)\n")
-    chk = table(dirs, "04_nar_checks")
-    below = None
+    chk, excl = table(dirs, "04_nar_checks"), table(dirs, "04_nar_exclusions")
+    below, n_big, nar_max = None, None, None
+    n_excl = {}
     if chk is not None:
         c = dict(zip(chk["quantity"], chk["value"]))
         below = c["share of Charged Off / Default loans with NAR < -0.5"]
-        adj = {k.replace("rows adjusted: ", ""): int(v) for k, v in c.items() if k.startswith("rows adjusted")}
-        add("NAR = (total_pymnt / loan_amnt)^(365/D) - 1. Rows where D had to be set to the 30-day minimum: "
-            + "; ".join(f"{k}: {v:,}" for k, v in adj.items()) + ".\n")
+        n_big, nar_max = c.get("loans with NAR > 1"), c.get("largest NAR")
+        add("NAR = (total_pymnt / loan_amnt)^(365/D) - 1, D = days from issue_d to last_pymnt_d.\n")
+        if excl is not None:
+            n_excl = {k: int(excl[k].sum()) for k in ("excluded total", "excluded Charged Off / Default",
+                                                      "excluded Fully Paid")}
+            add("Loans without a usable last-payment date (missing, or not after the issue date) are excluded from "
+                "the regression and from the loan selection; the classifiers still use every loan.\n")
+            add("| Split | Loans | Excluded: last_pymnt_d missing | Excluded: D <= 0 | Excluded total | "
+                "of which Charged Off / Default | of which Fully Paid | Kept for regression | "
+                "Kept, D floored to 30 days |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+            for _, r in excl.iterrows():
+                add("| " + r["split"] + " | " + " | ".join(f"{int(v):,}" for v in r.iloc[1:]) + " |")
+            add("")
         add(f"Paper claim \"most NARs of defaulted loans are well below -0.5\": in this data **{below:.1%}** of "
             f"Charged Off / Default loans have NAR < -0.5 ({c['share of Charged Off / Default loans with NAR < -0.25']:.1%} "
             f"are below -0.25). Distribution: `results/tables/04_nar_distribution.md`, "
@@ -167,6 +182,7 @@ def write_results(dirs):
 
     # ---- 4. selection
     add("## 4. Loan selection strategy (Section VIII), RF depth-10 predictions\n")
+    add("Percentages are of the loans kept for the regression (see the exclusion table in section 3).\n")
     sel, sweep = table(dirs, "05_selection_at_paper_threshold"), table(dirs, "05_threshold_sweep")
     if sel is None:
         add("_Stage 05 has not been run._\n")
@@ -199,6 +215,12 @@ def write_results(dirs):
         add("")
     add(DISCUSSION.format(
         below="n/a" if below is None else f"{below:.0%}",
+        n_sel="n/a" if sel is None else " / ".join(f"{int(v):,}" for v in sel["n_selected"]),
+        n_excl=f"{n_excl['excluded total']:,}" if n_excl else "n/a",
+        excl_co=f"{n_excl['excluded Charged Off / Default']:,}" if n_excl else "n/a",
+        excl_fp=f"{n_excl['excluded Fully Paid']:,}" if n_excl else "n/a",
+        n_big="n/a" if n_big is None else f"{int(n_big)}",
+        nar_max="n/a" if nar_max is None else f"{nar_max:.2f}",
         lin_r2=sci(reg["linear"][1]["r2"]) if "linear" in reg else "n/a",
         lin_blew="did" if "linear" in reg and reg["linear"][1]["r2"] < -1e3 else "did **not**"))
     rt = table(dirs, "runtimes")
@@ -221,8 +243,8 @@ scale of the NAR label (its variance is close to the ~0.053 implied by the paper
 columns it dropped. This replication removes every outcome / post-issuance column (payments received, recoveries,
 last payment date and amount, last FICO, outstanding principal, hardship and settlement fields; full list in
 `ASSUMPTIONS.md`), so the models only see what was known when the loan was issued. With those features the
-models are only moderately better than the base rate. The paper's numbers (AUC 0.94, 88% recall on defaults for a
-linear model, R2 of 0.24 for ridge regression on returns) are far above that. The most likely explanation is that
+models are only moderately better than the base rate. The authors' numbers (AUC 0.94 on the poster, 88% recall on
+defaults for a linear model, R2 of 0.24 for ridge regression on returns) are far above that. The most likely explanation is that
 some post-issuance columns were still among the paper's 1,097 features, which would make the targets partly
 predictable from their own consequences. **This is a hypothesis, not something this replication has tested**:
 testing it would mean deliberately adding leaking columns back, which is outside the "replicate only" scope.
@@ -245,11 +267,19 @@ Many charged-off borrowers pay for a year or more before stopping, which gives a
 return rather than a near-total loss.
 
 **Loan selection.** Because the regressors explain little of the NAR variance, predicted NARs are compressed
-towards the mean and very few loans exceed the paper's threshold M = 0.132, so the selected share and its
-return differ from the paper's 1.76% / 15% and are noisy; the sweep table shows how the selection behaves at
-lower thresholds.
-The very high *train* returns in the table come from a handful of loans repaid within a month or two with
-fees (NAR above 1, up to 22), which the forest partly memorizes; they do not carry over to the test set.
+towards the mean (in the full run 99.9% of the predictions are below 0.052). Only {n_sel} loans (train / test)
+exceed the paper's threshold M = 0.132, so the strategy cannot be reproduced at that threshold: the returns
+reported for it rest on a handful of loans and are not meaningful, and in the full run the train figure is
+dominated by a single charged-off loan with NAR 3.14. The sweep table shows the selection at lower thresholds.
+
+**Loans without a usable last-payment date.** {n_excl} loans ({excl_co} Charged Off / Default, {excl_fp} Fully
+Paid) have a missing `last_pymnt_d` or one that is not after `issue_d`, so D cannot be computed. A first version
+of this replication set D to 30 days for them. For charged-off loans in that group that had nevertheless paid
+back more than their principal, that rule produced impossible labels (NAR up to 22), which the regression forest
+partly memorized and which inflated the train-set selection return. They were artifacts of the 30-day rule, not
+real returns, so these loans are now excluded from the regression and from the loan selection (classification is
+unaffected). Kept loans with NAR above 1: {n_big} (largest NAR {nar_max}). In the full data these are charged-off
+loans whose recorded last payment falls one or two months after issue although more than the principal was paid back.
 """
 
 

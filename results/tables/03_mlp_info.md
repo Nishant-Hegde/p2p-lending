@@ -1,3 +1,3 @@
-| model | fit_seconds | n_iter |
-|---|---:|---:|
-| mlp | 508.9 | 49 |
+| model | n_iter |
+|---|---:|
+| mlp | 49 |

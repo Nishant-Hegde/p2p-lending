@@ -1,4 +1,4 @@
-| model | split | mse | r2 | fit_seconds |
+| model | split | n_loans | mse | r2 |
 |---|---|---:|---:|---:|
-| ridge | train | 0.054435 | 0.038063 | 45.5 |
-| ridge | test | 0.053287 | 0.034328 | 45.5 |
+| ridge | train | 549,558 | 0.052566 | 0.038711 |
+| ridge | test | 235,545 | 0.052526 | 0.034408 |

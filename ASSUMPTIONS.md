@@ -37,7 +37,7 @@ or at the top of the stage script. Tables referenced here are written to `result
    * *Leakage, outcome or post-issuance (38 raw columns + the helper `label`):* `loan_status` (after the labels
      are made), `total_pymnt, total_pymnt_inv, total_rec_prncp, total_rec_int, total_rec_late_fee, recoveries,
      collection_recovery_fee, last_pymnt_d, last_pymnt_amnt, next_pymnt_d, out_prncp, out_prncp_inv,
-     last_credit_pull_d, last_fico_range_high, last_fico_range_low`; all `hardship_*` (15 columns), all
+     last_credit_pull_d, last_fico_range_high, last_fico_range_low`; all `hardship_*` (12 columns), all
      `settlement_*` (5) and `debt_settlement_*` (2); plus `deferral_term, payment_plan_start_date,
      orig_projected_additional_accrued_interest`, which are hardship-plan fields without the `hardship_` prefix.
    * *More than 90% missing (30):* `annual_inc_joint, dti_joint, verification_status_joint, revol_bal_joint`, the
@@ -68,7 +68,9 @@ or at the top of the stage script. Tables referenced here are written to `result
      num_actv_bc_tl, num_actv_rev_tl, num_bc_sats, num_bc_tl, num_il_tl, num_op_rev_tl, num_rev_accts,
      num_rev_tl_bal_gt_0, num_sats, num_tl_120dpd_2m, num_tl_30dpd, num_tl_90g_dpd_24m, num_tl_op_past_12m`).
    * **`MAX_SET_FACTOR = 2.0`.** The paper says "a constant factor" without a value. 2 x max places "never
-     happened" clearly beyond the longest observed gap.
+     happened" clearly beyond the longest observed gap. The authors' poster says missing values are replaced
+     with "the max" of the column, which suggests a factor of 1; the paper's "constant factor multiplied with the
+     maximum" is followed here with 2.0, so this is a possible difference from what the authors ran.
    * `emp_length` (categorical, 5.3% missing) gets its own level "Unknown" rather than a numeric fill.
 9. **Categoricals, one-hot, no level dropped:** `term, grade, sub_grade, emp_length, home_ownership,
    verification_status, purpose, zip_code, addr_state, initial_list_status, application_type`. `term` and
@@ -94,7 +96,15 @@ or at the top of the stage script. Tables referenced here are written to `result
 ## Classification (Section V)
 16. Hyper-parameters are those listed in the paper; anything it does not state is the scikit-learn 1.6 default:
     `LogisticRegression` solver `lbfgs`, `C=1.0` (the paper's lambda is not given); `MLPClassifier`
-    `max_iter=200`, no early stopping, `tol=1e-4`; the forest grows full-depth trees with bootstrap sampling.
+    `max_iter=200`, no early stopping, `tol=1e-4`; the forest uses bootstrap sampling.
+    * **The classifier MLP uses the Adam solver.** The paper only says "Gradient Descent-based solver" for the
+      classifier (it names Adam for the regression network). Adam is assumed because the paper's mini-batch size
+      (200), learning rate (0.001) and L2 penalty (0.0001) are exactly scikit-learn's defaults for Adam.
+    * **The Random Forest classifier has unlimited tree depth** (`max_depth=None`, `min_samples_leaf=1`), because
+      the paper states no limit. It therefore fits the training set perfectly. The paper's own train table
+      (Default recall 0.82, weighted F1 0.96) suggests smaller trees, but the authors' poster shows a perfect
+      train confusion matrix (99,163 / 0 / 0 / 422,707) like this replication's; the two sources disagree and
+      neither states a depth or leaf-size limit.
 17. `class_weight="balanced"` is applied to logistic regression only, as in the paper.
 18. Class names follow the paper's tables: "Default" = label 0 (Charged Off + Default), "Paid Off" = label 1.
 19. `n_jobs=-1` is set for the random forests and `LinearRegression`. `LogisticRegression` (binary, lbfgs),
@@ -104,13 +114,26 @@ or at the top of the stage script. Tables referenced here are written to `result
 20. **NAR = (total_pymnt / loan_amnt) ^ (365 / D) - 1.** In the PDF the exponent is typeset as `1/(365/D)`,
     which taken literally equals `D/365` and is not an annualization. `365/D` is used. Supporting check from the
     data: the paper's own numbers imply a label variance of MSE / (1 - R2) of about 0.053; the `365/D` label has
-    variance 0.056, the literal `D/365` label 1.36.
-21. **D** = days from `issue_d` to `last_pymnt_d`. Both are month-level, so D is a multiple of about 30. A
-    missing `last_pymnt_d`, D <= 0 and 0 < D < 30 are all set to `MIN_DAYS = 30`. (A loan with no payment has
-    ratio 0 and NAR = -1 whatever D is.) The number of affected rows is printed and saved in
-    `results/tables/04_nar_checks.md`. NAR is not clipped or winsorized, so a handful of loans repaid with fees
-    within one or two months have very large values.
-22. Same features and the same train/test rows as the classifiers.
+    variance 0.056 over all loans (0.055 after the exclusion in #21), the literal `D/365` label 1.36.
+21. **D** = days from `issue_d` to `last_pymnt_d`. Both are month-level, so D is a multiple of about 30.
+    * **Loans without a usable last-payment date are excluded from the regression and the loan selection**
+      (train and test): `last_pymnt_d` missing, or not after `issue_d` (D <= 0). On the full data that is 1,717
+      loans (1,216 train, 501 test): 587 with a missing date, all Charged Off, and 1,130 with D <= 0, of which
+      1,129 are Fully Paid (repaid in the month of issue) and 1 is Charged Off. 785,103 loans remain. The paper
+      does not say how it treated such loans. The exact counts of a run are in
+      `results/tables/04_nar_exclusions.md`.
+    * Why they are excluded and not given a default D: an earlier version set D to 30 days for them. 455 of the
+      587 loans with a missing date have `total_pymnt > 0` (money came in although no payment date is
+      recorded), and for those that had paid back more than their principal the 30-day rule produced impossible
+      labels, up to NAR = 22. These were artifacts of the rule, not real returns; the regression forest partly
+      memorized them and they inflated the train-set selection return.
+    * For 0 < D < 30 (496 loans, e.g. a 28-day February) D is set to `MIN_DAYS = 30`.
+    * NAR is not clipped or winsorized. After the exclusion 8 loans still have NAR above 1 (largest 3.18): they
+      are Charged Off loans whose recorded last payment is one or two months after issue although more than the
+      principal was paid back, so their recorded dates are probably also unreliable; they are kept because their
+      D is defined.
+22. Same features and the same train/test assignment as the classifiers, minus the loans excluded in #21.
+    The classifiers (stages 01-03) still use all 786,820 loans.
 23. `LinearRegression`, `Ridge(alpha=1)`: scikit-learn defaults. `MLPRegressor`: `max_iter=200`, no early
     stopping, target not rescaled.
 24. **Regression forests: 100 trees** (`RF_REG_TREES`; the paper gives no count) and **`max_features=1.0`**
@@ -123,6 +146,6 @@ or at the top of the stage script. Tables referenced here are written to `result
     portfolio return is the plain mean of the selected loans' actual NAR; there is no weighting by term or amount
     and no reinvestment.
 26. Fig. 2 ranks loans by predicted NAR (high to low) and plots the mean actual NAR of the top-k loans for
-    k >= 100 against k / N.
+    k >= 100 against k / N, where N is the number of loans kept for the regression in that split (#21).
 27. The threshold M = 0.132 is the paper's value, applied as given ("predicted NAR > M"), not re-tuned.
 28. The abstract says the strategy picks 1.76% of loans; Section VIII says 1.7%. 1.76% is used for comparison.

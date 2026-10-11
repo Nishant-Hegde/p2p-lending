@@ -70,8 +70,9 @@ def main():
             "quantity": ["rows", "n_positive (Fully Paid)", "n_negative (Charged Off + Default)",
                          "pct_positive", "pct_negative", "raw columns"]
                         + [f"rows issued {y}" for y in years.index],
-            "mine": [n, pos, n - pos, round(100 * pos / n, 2), round(100 * (1 - pos / n), 2), df.shape[1] - 1]
-                    + [int(c) for c in years.values],
+            # dtype=object keeps counts as integers next to the two percentages
+            "mine": pd.Series([n, pos, n - pos, round(100 * pos / n, 2), round(100 * (1 - pos / n), 2),
+                               df.shape[1] - 1] + [int(c) for c in years.values], dtype=object),
             "paper": ["745,529", "", "", "~81", "~19", ""] + [""] * len(years)})
         save_table(summary, "01_dataset_summary", dirs, floatfmt="{:.2f}")
     record_runtime(dirs, STAGE, "total", total["seconds"])

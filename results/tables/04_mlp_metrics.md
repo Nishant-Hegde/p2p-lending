@@ -1,4 +1,4 @@
-| model | split | mse | r2 | fit_seconds | n_iter |
+| model | split | n_loans | mse | r2 | n_iter |
 |---|---|---:|---:|---:|---:|
-| mlp | train | 0.050369 | 0.10992 | 244.4 | 22 |
-| mlp | test | 0.054504 | 0.012273 | 244.4 | 22 |
+| mlp | train | 549,558 | 0.04828 | 0.1171 | 23 |
+| mlp | test | 235,545 | 0.054175 | 0.0040925 | 23 |

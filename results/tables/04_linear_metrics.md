@@ -1,4 +1,4 @@
-| model | split | mse | r2 | fit_seconds |
+| model | split | n_loans | mse | r2 |
 |---|---|---:|---:|---:|
-| linear | train | 0.054435 | 0.038072 | 98.1 |
-| linear | test | 0.053288 | 0.03432 | 98.1 |
+| linear | train | 549,558 | 0.052566 | 0.038718 |
+| linear | test | 235,545 | 0.052528 | 0.034385 |

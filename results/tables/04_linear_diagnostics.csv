@@ -1,18 +1,18 @@
 quantity,value
 design-matrix columns,1126.0
 rank found by least squares,1090.0
-largest |coefficient|,2.0221776952386166
-median |coefficient|,0.0008024508201150988
+largest |coefficient|,1.5691906948056045
+median |coefficient|,0.0007972623066118808
 largest |standardized feature value| in test,742.1408081054688
-test prediction min,-1.792787080546775
-test prediction max,0.3366617150177967
+test prediction min,-1.7883397152870295
+test prediction max,0.33762558927419206
 test rows with |prediction| > 10,0.0
-largest absolute test error,6.249609941785143
-... its prediction,0.024082308858067995
-... its true NAR,6.273692250643211
-"... largest single term: fico_range_low (x=2.363, coef=2.022)",4.778004114238531
-top-5 |coef|: fico_range_low,2.0221776952386166
-top-5 |coef|: fico_range_high,-2.0153388975379243
-top-5 |coef|: funded_amnt_inv,0.4277355505116854
-top-5 |coef|: funded_amnt,-0.2270505424376234
-top-5 |coef|: loan_amnt,-0.16771719688145426
+largest absolute test error,1.8762693742272545
+... its prediction,-1.7883397152870295
+... its true NAR,0.08792965894022498
+"... largest single term: dti (x=117.9, coef=-0.01526)",-1.7987667329878483
+top-5 |coef|: fico_range_low,1.5691906948056045
+top-5 |coef|: fico_range_high,-1.5625254995116864
+top-5 |coef|: funded_amnt_inv,0.42825720514431764
+top-5 |coef|: funded_amnt,-0.2264924714939259
+top-5 |coef|: loan_amnt,-0.16776697972752144

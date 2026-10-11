@@ -1,3 +1,3 @@
-| model | fit_seconds | n_iter |
-|---|---:|---:|
-| logreg | 180.5 | 79 |
+| model | n_iter |
+|---|---:|
+| logreg | 79 |
